@@ -10,12 +10,14 @@
 #define FILE_SIZE 1024*1024*10
 #define BUF_SIZE 1024*100
 
+
 int main(void)
 {	
-	int logfd = 0,ret = 0,recfd = 0,offset=0,ret1 = 0;
+	int logfd = 0,ret = 0,recfd = 0,offset=0,ret1 = 0,len = 0;
 	char buf[BUF_SIZE] = {0};//文件写内容
 	char recbuf[50] = {0};//获取文件指针的buf
 	struct stat state;
+	
 	
 	logfd = open("./log.txt",O_CREAT|O_RDWR,0777);//检查日志文件是否存在，如不存在则创建，存在则打开
 	if(logfd == -1)
@@ -48,12 +50,25 @@ int main(void)
 	{
 		memset(buf,0,strlen(buf)+1);//清掉buf中的东西，以免重复打印
 		
-		ret = klogctl(4,buf,BUF_SIZE);//获取printk函数的信息到buf中，并清除环形缓冲区
+		len = klogctl(9,NULL,0);//获取环形缓冲区中没有读取过的数据的长度
+		if(len < 0)
+		{
+			perror("klogctl len error:");
+		}
+		if(len!=0)
+		{
+			printf("len:%d\r\n",len);
+		}
+		
+		//usleep(5000);
+		
+		
+		ret = klogctl(4,buf, len+1);//获取printk函数的信息到buf中，并清除环形缓冲区
 		if(ret < 0)
 		{
 			perror("klogctl error:");
 		}
-		
+	
 		if(strlen(buf) != 0)
 		{
 			ret = write(logfd,buf,strlen(buf)+1);//把内核信息写到文件里面
@@ -61,18 +76,22 @@ int main(void)
 		}
 		
 		offset = lseek(logfd,0,SEEK_CUR);//获取文件指针的当前值
-		sprintf(recbuf,"Pointer position:%d\r\n",offset);
 		
-		ret1 = lseek(recfd,0,SEEK_SET);//一直使记录文件的指针在文件头一直覆盖
-		write(recfd,recbuf,strlen(recbuf)+1);//写入文件指针当前值*/
-	
-		if(offset < FILE_SIZE)
+		if(offset >= FILE_SIZE)
 		{
-			lseek(logfd,offset,SEEK_SET);//返回原位置
+			lseek(logfd,0,SEEK_SET);//返回头部
+			
+			offset = 0;
+			sprintf(recbuf,"Pointer position:%d\r\n",offset);
+			
+			ret1 = lseek(recfd,0,SEEK_SET);//一直使记录文件的指针在文件头一直覆盖
+			write(recfd,recbuf,strlen(recbuf)+1);//写入文件指针当前值*/
 		}
 		else
 		{
-			lseek(logfd,0,SEEK_SET);//返回头部
+			sprintf(recbuf,"Pointer position:%d\r\n",offset);
+			ret1 = lseek(recfd,0,SEEK_SET);//一直使记录文件的指针在文件头一直覆盖
+			write(recfd,recbuf,strlen(recbuf)+1);//写入文件指针当前值*/
 		}
 		
 		usleep(100000);
